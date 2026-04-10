@@ -1,35 +1,52 @@
 import asyncio
 import logging
 import os
+import sys
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.client.default import DefaultBotProperties
 from dotenv import load_dotenv
+from redis.asyncio import Redis
+from aiogram.fsm.storage.redis import RedisStorage
 
-# Загружаем переменные окружения из Railway Variables
+# Загружаем переменные окружения
 load_dotenv()
+
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_ID = int(os.getenv("ADMIN_ID"))
+ADMIN_ID_STR = os.getenv("ADMIN_ID")
+REDIS_URL = os.getenv("REDIS_URL")  # Railway добавит эту переменную автоматически
+
+if not BOT_TOKEN or not ADMIN_ID_STR:
+    raise ValueError("❌ BOT_TOKEN или ADMIN_ID не заданы в переменных окружения!")
+if not REDIS_URL:
+    raise ValueError("❌ REDIS_URL не найден. Добавьте Redis в Railway!")
+
+ADMIN_ID = int(ADMIN_ID_STR)
 
 # Настройка логирования
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler("bot.log", encoding='utf-8')
+    ]
+)
+logger = logging.getLogger(__name__)
 
-# Инициализация бота и диспетчера (parse_mode='HTML' задан напрямую)
+# Инициализация Redis и хранилища FSM
+redis = Redis.from_url(REDIS_URL, decode_responses=False)  # decode_responses=False нужно для aiogram-fsm-redis
+storage = RedisStorage(redis=redis)
+
+# Инициализация бота и диспетчера
 bot = Bot(token=BOT_TOKEN, parse_mode='HTML')
-storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 
-# --- Состояния диалога ---
-class OrderForm(StatesGroup):
-    waiting_for_cargo = State()
-    waiting_for_confirm = State()
-    waiting_for_name = State()
-    waiting_for_phone = State()
-    waiting_for_address = State()
-    waiting_for_comment = State()
+# --- Далее идут состояния OrderForm, LANGUAGES, клавиатуры и обработчики ---
+# (скопируйте их из предыдущей рабочей версии)
 
 # --- Многоязычные тексты (без изменений) ---
 LANGUAGES = {
