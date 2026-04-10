@@ -7,7 +7,6 @@ from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.client.default import DefaultBotProperties
 from dotenv import load_dotenv
 
 # Загружаем переменные окружения из Railway Variables
@@ -18,8 +17,8 @@ ADMIN_ID = int(os.getenv("ADMIN_ID"))
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
 
-# Инициализация бота и диспетчера
-bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode='HTML'))
+# Инициализация бота и диспетчера (parse_mode='HTML' задан напрямую)
+bot = Bot(token=BOT_TOKEN, parse_mode='HTML')
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 
@@ -32,7 +31,7 @@ class OrderForm(StatesGroup):
     waiting_for_address = State()
     waiting_for_comment = State()
 
-# --- Многоязычные тексты ---
+# --- Многоязычные тексты (без изменений) ---
 LANGUAGES = {
     'ru': {
         'select_lang': "🇷🇺 Выберите язык / Select language:",
@@ -108,10 +107,10 @@ LANGUAGES = {
     }
 }
 
-# Хранилище языка пользователя (в оперативной памяти)
+# Хранилище языка пользователя
 user_lang = {}
 
-# --- Клавиатуры ---
+# --- Клавиатуры (без изменений) ---
 def get_lang_keyboard():
     buttons = [
         [KeyboardButton(text="🇷🇺 Русский")],
@@ -143,7 +142,7 @@ def get_skip_keyboard(lang):
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True, one_time_keyboard=True)
 
-# --- Обработчики ---
+# --- Обработчики (без изменений, кроме финальной части) ---
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     await message.answer(LANGUAGES['ru']['select_lang'], reply_markup=get_lang_keyboard())
