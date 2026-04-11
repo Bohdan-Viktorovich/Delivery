@@ -34,12 +34,11 @@ bot = Bot(
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 
-# --- Middleware для однократного напоминания о состоянии после перезапуска бота ---
+# --- Middleware для однократного напоминания с восстановлением клавиатуры ---
 from aiogram import BaseMiddleware
-from aiogram.types import Message
+from aiogram.types import Message, ReplyKeyboardRemove
 
-# Множество пользователей, которым уже показали напоминание в текущей "сессии"
-reminded_users = set()
+reminded_users = set()  # пользователи, которым уже показывали напоминание в текущей сессии
 
 class StateReminderMiddleware(BaseMiddleware):
     async def __call__(self, handler, event: Message, data: dict):
@@ -53,26 +52,43 @@ class StateReminderMiddleware(BaseMiddleware):
                 lang = user_lang.get(user_id, 'ru')
                 t = LANGUAGES[lang]
                 
-                # Карта соответствия состояния → текст напоминания
-                reminder_map = {
-                    OrderForm.waiting_for_cargo.state: t['lang_set'],
-                    OrderForm.waiting_for_confirm.state: t['cargo_prompt'],
-                    OrderForm.waiting_for_name.state: t['confirm_cargo'],
-                    OrderForm.waiting_for_phone.state: t['enter_name'],
-                    OrderForm.waiting_for_address.state: t['enter_phone'],
-                    OrderForm.waiting_for_comment.state: t['enter_address'],
-                    "final": t['enter_comment'],
-                }
-                reminder_text = reminder_map.get(current_state)
+                # Определяем текст и клавиатуру в зависимости от состояния
+                reminder_text = None
+                reply_markup = None
                 
-                # Отправляем напоминание только если это не команда /start
+                if current_state == OrderForm.waiting_for_cargo.state:
+                    reminder_text = t['lang_set']
+                    reply_markup = get_cargo_keyboard(lang)
+                elif current_state == OrderForm.waiting_for_confirm.state:
+                    reminder_text = t['cargo_prompt']
+                    reply_markup = ReplyKeyboardRemove()
+                elif current_state == OrderForm.waiting_for_name.state:
+                    # В этом состоянии мы на самом деле ожидаем подтверждение (confirm),
+                    # но пользователь уже нажал "Подтвердить", и бот перешёл к waiting_for_phone.
+                    # Поэтому для waiting_for_name напоминание не нужно (оно обрабатывается в waiting_for_phone).
+                    pass
+                elif current_state == OrderForm.waiting_for_phone.state:
+                    reminder_text = t['enter_name']
+                    reply_markup = ReplyKeyboardRemove()
+                elif current_state == OrderForm.waiting_for_address.state:
+                    reminder_text = t['enter_phone']
+                    reply_markup = ReplyKeyboardRemove()
+                elif current_state == OrderForm.waiting_for_comment.state:
+                    reminder_text = t['enter_address']
+                    reply_markup = ReplyKeyboardRemove()
+                elif current_state == "final":
+                    reminder_text = t['enter_comment']
+                    reply_markup = get_skip_keyboard(lang)
+                
+                # Отправляем напоминание, если оно есть и это не команда /start
                 if reminder_text and not (event.text and event.text.startswith('/start')):
                     await event.answer(
-                        f"🔔 Бот был перезапущен. Продолжим с того места, где остановились:\n\n{reminder_text}"
+                        f"🔔 Бот был перезапущен. Продолжим:\n\n{reminder_text}",
+                        reply_markup=reply_markup
                     )
-                    reminded_users.add(user_id)  # Запоминаем, что этому пользователю уже напомнили
+                    reminded_users.add(user_id)
         
-        # Передаём управление дальше обычным хэндлерам
+        # Передаём управление хэндлерам
         return await handler(event, data)
 
 # Подключаем middleware
