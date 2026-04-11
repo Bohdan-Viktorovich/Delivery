@@ -22,6 +22,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID_STR = os.getenv("ADMIN_ID")
 REDIS_URL = os.getenv("REDIS_URL")
 GEOAPIFY_API_KEY = os.getenv("GEOAPIFY_API_KEY")
+PORT = int(os.getenv("PORT", 8000))
 
 if not BOT_TOKEN or not ADMIN_ID_STR:
     raise ValueError("❌ BOT_TOKEN или ADMIN_ID не заданы!")
@@ -47,6 +48,12 @@ storage = RedisStorage(redis=redis_client)
 
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode='HTML'))
 dp = Dispatcher(storage=storage)
+# --- Веб-сервер для Railway healthcheck ---
+async def handle_health(request):
+    return web.Response(text="Bot is running")
+
+app = web.Application()
+app.router.add_get("/", handle_health)
 
 # --- Middleware напоминания ---
 reminded_users = set()
@@ -480,6 +487,14 @@ async def finalize_order(message: types.Message, state: FSMContext):
     await state.clear()
 
 async def main():
+    # Запускаем веб-сервер
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", PORT)
+    await site.start()
+    logging.info(f"Web server started on port {PORT}")
+    
+    # Запускаем поллинг бота
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
