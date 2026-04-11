@@ -12,6 +12,13 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.client.default import DefaultBotProperties
 from dotenv import load_dotenv
 
+import aiohttp
+from urllib.parse import quote
+
+GEOAPIFY_API_KEY = os.getenv("GEOAPIFY_API_KEY")
+if not GEOAPIFY_API_KEY:
+    raise ValueError("❌ GEOAPIFY_API_KEY не задан в переменных окружения!")
+
 # Загружаем переменные окружения из Railway Variables
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
