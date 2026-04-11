@@ -31,6 +31,53 @@ bot = Bot(
 )
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
+# --- Middleware для напоминания о текущем состоянии при перезапуске бота ---
+from aiogram import BaseMiddleware
+from aiogram.types import Message
+
+class StateReminderMiddleware(BaseMiddleware):
+    async def __call__(self, handler, event: Message, data: dict):
+        # Проверяем, есть ли активное состояние
+        state: FSMContext = data.get('state')
+        if state:
+            current_state = await state.get_state()
+            if current_state is not None:
+                # Получаем язык пользователя
+                user_id = event.from_user.id
+                lang = user_lang.get(user_id, 'ru')
+                t = LANGUAGES[lang]
+                
+                # Определяем, какое напоминание отправить в зависимости от состояния
+                reminder_text = None
+                if current_state == OrderForm.waiting_for_cargo.state:
+                    reminder_text = t['lang_set']
+                elif current_state == OrderForm.waiting_for_confirm.state:
+                    reminder_text = t['cargo_prompt']
+                elif current_state == OrderForm.waiting_for_name.state:
+                    reminder_text = t['confirm_cargo']  # на самом деле ждём подтверждения
+                elif current_state == OrderForm.waiting_for_phone.state:
+                    reminder_text = t['enter_name']
+                elif current_state == OrderForm.waiting_for_address.state:
+                    reminder_text = t['enter_phone']
+                elif current_state == OrderForm.waiting_for_comment.state:
+                    reminder_text = t['enter_address']
+                elif current_state == "final":
+                    reminder_text = t['enter_comment']
+                
+                # Если пользователь отправил что-то, что не подходит под текущее состояние,
+                # и это не команда /start, отправляем напоминание
+                if reminder_text and not event.text.startswith('/start'):
+                    # Проверяем, не обработает ли это сообщение другой хэндлер
+                    # Для простоты отправляем напоминание всегда, когда состояние активно,
+                    # но не будем мешать корректным ответам.
+                    # Чтобы не спамить, отправим только если сообщение не является ожидаемым типом.
+                    # Но лучше отправить всегда, чтобы пользователь не терялся.
+                    await event.answer(f"🔔 Продолжим с того места, где остановились:\n\n{reminder_text}")
+        
+        return await handler(event, data)
+
+# Подключаем middleware
+dp.message.middleware(StateReminderMiddleware())
 
 # --- Состояния диалога (должны быть объявлены до хэндлеров) ---
 class OrderForm(StatesGroup):
