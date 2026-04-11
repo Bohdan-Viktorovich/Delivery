@@ -87,8 +87,9 @@ dp.message.middleware(StateReminderMiddleware())
 # --- Состояния диалога (должны быть объявлены до хэндлеров) ---
 class OrderForm(StatesGroup):
     waiting_for_cargo = State()
-    waiting_for_weight = State()      # новое
-    waiting_for_dimensions = State()  # новое
+    waiting_for_weight = State()
+    waiting_for_dimensions = State()
+    waiting_for_pickup = State()      # ← новое: адрес отправителя
     waiting_for_confirm = State()
     waiting_for_name = State()
     waiting_for_phone = State()
@@ -97,7 +98,7 @@ class OrderForm(StatesGroup):
 
 # --- Многоязычные тексты ---
 LANGUAGES = {
-    'ru': {
+    'ru': {'ask_pickup': "📍 Укажите адрес, откуда забрать груз (улица, дом):",
         'select_lang': "🇷🇺 Выберите язык / Select language:",
         'lang_set': "✅ Язык установлен: Русский. Выберите, что нужно доставить:",
         'docs': "📄 Документы",
@@ -125,7 +126,7 @@ LANGUAGES = {
         'cancel_text': "🚫 Действие отменено. Чтобы начать заново, нажмите /start.",
         'cargo_types': ["📄 Документы", "🍕 Еда", "📦 Крупногабарит", "🌸 Цветы"]
     },
-    'ro': {
+    'ro': {'ask_pickup': "📍 Indicați adresa de unde trebuie ridicat coletul (stradă, număr):",
         'select_lang': "🇷🇴 Selectați limba / Выберите язык:",
         'lang_set': "✅ Limba setată: Română. Selectați ce trebuie livrat:",
         'docs': "📄 Documente",
@@ -153,7 +154,7 @@ LANGUAGES = {
         'cancel_text': "🚫 Acțiune anulată. Pentru a începe din nou, apăsați /start.",
         'cargo_types': ["📄 Documente", "🍕 Mâncare", "📦 Obiecte voluminoase", "🌸 Flori"]
     },
-    'en': {
+    'en': {'ask_pickup': "📍 Enter the pickup address (street, building):",
         'select_lang': "🇬🇧 Select language / Выберите язык:",
         'lang_set': "✅ Language set: English. Select what needs to be delivered:",
         'docs': "📄 Documents",
