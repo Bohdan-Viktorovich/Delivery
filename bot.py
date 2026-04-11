@@ -1,54 +1,47 @@
 import asyncio
 import logging
 import os
-import sys
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
+from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.client.default import DefaultBotProperties
 from dotenv import load_dotenv
-from redis.asyncio import Redis
-from aiogram.fsm.storage.redis import RedisStorage
 
-# Загружаем переменные окружения
+# Загружаем переменные окружения из Railway Variables
 load_dotenv()
-
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID_STR = os.getenv("ADMIN_ID")
-REDIS_URL = os.getenv("REDIS_URL")  # Railway добавит эту переменную автоматически
+
 
 if not BOT_TOKEN or not ADMIN_ID_STR:
     raise ValueError("❌ BOT_TOKEN или ADMIN_ID не заданы в переменных окружения!")
-if not REDIS_URL:
-    raise ValueError("❌ REDIS_URL не найден. Добавьте Redis в Railway!")
 
 ADMIN_ID = int(ADMIN_ID_STR)
 
 # Настройка логирования
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler("bot.log", encoding='utf-8')
-    ]
+logging.basicConfig(level=logging.INFO)
+
+# Инициализация бота и диспетчера (с использованием DefaultBotProperties)
+bot = Bot(
+    token=BOT_TOKEN,
+    default=DefaultBotProperties(parse_mode='HTML')
 )
-logger = logging.getLogger(__name__)
-
-# Инициализация Redis и хранилища FSM
-redis = Redis.from_url(REDIS_URL, decode_responses=False)  # decode_responses=False нужно для aiogram-fsm-redis
-storage = RedisStorage(redis=redis)
-
-# Инициализация бота и диспетчера
-bot = Bot(token=BOT_TOKEN, parse_mode='HTML')
+storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 
-# --- Далее идут состояния OrderForm, LANGUAGES, клавиатуры и обработчики ---
-# (скопируйте их из предыдущей рабочей версии)
+# --- Состояния диалога (должны быть объявлены до хэндлеров) ---
+class OrderForm(StatesGroup):
+    waiting_for_cargo = State()
+    waiting_for_confirm = State()
+    waiting_for_name = State()
+    waiting_for_phone = State()
+    waiting_for_address = State()
+    waiting_for_comment = State()
 
-# --- Многоязычные тексты (без изменений) ---
+# --- Многоязычные тексты ---
 LANGUAGES = {
     'ru': {
         'select_lang': "🇷🇺 Выберите язык / Select language:",
@@ -127,7 +120,7 @@ LANGUAGES = {
 # Хранилище языка пользователя
 user_lang = {}
 
-# --- Клавиатуры (без изменений) ---
+# --- Клавиатуры ---
 def get_lang_keyboard():
     buttons = [
         [KeyboardButton(text="🇷🇺 Русский")],
@@ -159,7 +152,7 @@ def get_skip_keyboard(lang):
     ]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True, one_time_keyboard=True)
 
-# --- Обработчики (без изменений, кроме финальной части) ---
+# --- Обработчики ---
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     await message.answer(LANGUAGES['ru']['select_lang'], reply_markup=get_lang_keyboard())
@@ -216,7 +209,11 @@ async def process_cargo_details(message: types.Message, state: FSMContext):
     
     delivery_price = t['price_fixed']
     
-    confirm_text = t['confirm_cargo'].format(cargo_type=cargo_type, cargo_details=cargo_details, delivery_price=delivery_price)
+    confirm_text = t['confirm_cargo'].format(
+        cargo_type=cargo_type,
+        cargo_details=cargo_details,
+        delivery_price=delivery_price
+    )
     await message.answer(confirm_text, reply_markup=get_confirm_keyboard(lang))
     await state.set_state(OrderForm.waiting_for_name)
 
