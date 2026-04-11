@@ -34,64 +34,47 @@ bot = Bot(
 storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 
-# --- Middleware для однократного напоминания с восстановлением клавиатуры ---
+# --- Middleware для напоминания о состоянии после перезапуска ---
+import time
 from aiogram import BaseMiddleware
 from aiogram.types import Message, ReplyKeyboardRemove
 
-reminded_users = set()  # пользователи, которым уже показывали напоминание в текущей сессии
+reminded_users = set()
 
 class StateReminderMiddleware(BaseMiddleware):
     async def __call__(self, handler, event: Message, data: dict):
         state: FSMContext = data.get('state')
         user_id = event.from_user.id
         
-        # Проверяем, есть ли активное состояние и не показывали ли уже напоминание
         if state and user_id not in reminded_users:
             current_state = await state.get_state()
             if current_state is not None:
                 lang = user_lang.get(user_id, 'ru')
                 t = LANGUAGES[lang]
                 
-                # Определяем текст и клавиатуру в зависимости от состояния
-                reminder_text = None
-                reply_markup = None
+                reminder_map = {
+                    OrderForm.waiting_for_cargo.state: (t['lang_set'], get_cargo_keyboard(lang)),
+                    OrderForm.waiting_for_weight.state: (t['ask_weight'], ReplyKeyboardRemove()),
+                    OrderForm.waiting_for_dimensions.state: (t['ask_dimensions'], ReplyKeyboardRemove()),
+                    OrderForm.waiting_for_confirm.state: (t['cargo_prompt'], ReplyKeyboardRemove()),
+                    OrderForm.waiting_for_name.state: (t['confirm_cargo'], get_confirm_keyboard(lang)),
+                    OrderForm.waiting_for_phone.state: (t['enter_name'], ReplyKeyboardRemove()),
+                    OrderForm.waiting_for_address.state: (t['enter_phone'], ReplyKeyboardRemove()),
+                    OrderForm.waiting_for_comment.state: (t['enter_address'], ReplyKeyboardRemove()),
+                    "final": (t['enter_comment'], get_skip_keyboard(lang)),
+                }
                 
-                if current_state == OrderForm.waiting_for_cargo.state:
-                    reminder_text = t['lang_set']
-                    reply_markup = get_cargo_keyboard(lang)
-                elif current_state == OrderForm.waiting_for_confirm.state:
-                    reminder_text = t['cargo_prompt']
-                    reply_markup = ReplyKeyboardRemove()
-                elif current_state == OrderForm.waiting_for_name.state:
-                    # В этом состоянии мы на самом деле ожидаем подтверждение (confirm),
-                    # но пользователь уже нажал "Подтвердить", и бот перешёл к waiting_for_phone.
-                    # Поэтому для waiting_for_name напоминание не нужно (оно обрабатывается в waiting_for_phone).
-                    pass
-                elif current_state == OrderForm.waiting_for_phone.state:
-                    reminder_text = t['enter_name']
-                    reply_markup = ReplyKeyboardRemove()
-                elif current_state == OrderForm.waiting_for_address.state:
-                    reminder_text = t['enter_phone']
-                    reply_markup = ReplyKeyboardRemove()
-                elif current_state == OrderForm.waiting_for_comment.state:
-                    reminder_text = t['enter_address']
-                    reply_markup = ReplyKeyboardRemove()
-                elif current_state == "final":
-                    reminder_text = t['enter_comment']
-                    reply_markup = get_skip_keyboard(lang)
-                
-                # Отправляем напоминание, если оно есть и это не команда /start
-                if reminder_text and not (event.text and event.text.startswith('/start')):
-                    await event.answer(
-                        f"🔔 Бот был перезапущен. Продолжим:\n\n{reminder_text}",
-                        reply_markup=reply_markup
-                    )
-                    reminded_users.add(user_id)
+                if current_state in reminder_map:
+                    reminder_text, reply_markup = reminder_map[current_state]
+                    if not (event.text and event.text.startswith('/start')):
+                        await event.answer(
+                            f"🔔 Бот был перезапущен. Продолжим:\n\n{reminder_text}",
+                            reply_markup=reply_markup
+                        )
+                        reminded_users.add(user_id)
         
-        # Передаём управление хэндлерам
         return await handler(event, data)
 
-# Подключаем middleware
 dp.message.middleware(StateReminderMiddleware())
 
 # --- Состояния диалога (должны быть объявлены до хэндлеров) ---
@@ -264,6 +247,58 @@ async def process_cargo_selection(message: types.Message, state: FSMContext):
         return
     
     await state.update_data(cargo_type=message.text)
+    await message.answer(t['ask_weight'], reply_markup=types.ReplyKeyboardRemove())
+    await state.set_state(OrderForm.waiting_for_weight)
+
+    @dp.message(OrderForm.waiting_for_weight)
+async def process_weight(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    lang = user_lang.get(user_id, 'ru')
+    t = LANGUAGES[lang]
+    
+    if message.text == t['cancel']:
+        await state.clear()
+        await message.answer(t['cancel_text'], reply_markup=get_lang_keyboard())
+        return
+    
+    try:
+        weight = float(message.text.replace(',', '.'))
+        if weight <= 0:
+            raise ValueError
+    except ValueError:
+        await message.answer(t['invalid_weight'])
+        return
+    
+    await state.update_data(weight=weight)
+    await message.answer(t['ask_dimensions'])
+    await state.set_state(OrderForm.waiting_for_dimensions)
+
+    import re  # добавьте этот импорт в начало файла, если ещё нет
+
+@dp.message(OrderForm.waiting_for_dimensions)
+async def process_dimensions(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    lang = user_lang.get(user_id, 'ru')
+    t = LANGUAGES[lang]
+    
+    if message.text == t['cancel']:
+        await state.clear()
+        await message.answer(t['cancel_text'], reply_markup=get_lang_keyboard())
+        return
+    
+    pattern = r'^(\d+)\s*[xх]\s*(\d+)\s*[xх]\s*(\d+)$'
+    match = re.match(pattern, message.text.strip().lower())
+    if not match:
+        await message.answer(t['invalid_dimensions'])
+        return
+    
+    length, width, height = map(int, match.groups())
+    volume = (length * width * height) / 1_000_000  # переводим см³ в м³
+    
+    await state.update_data(
+        dimensions=f"{length}x{width}x{height}",
+        volume=volume
+    )
     await message.answer(t['cargo_prompt'], reply_markup=types.ReplyKeyboardRemove())
     await state.set_state(OrderForm.waiting_for_confirm)
 
@@ -282,8 +317,18 @@ async def process_cargo_details(message: types.Message, state: FSMContext):
     await state.update_data(cargo_details=cargo_details)
     data = await state.get_data()
     cargo_type = data.get('cargo_type')
+    weight = data.get('weight', 0)
+    volume = data.get('volume', 0)
     
-    delivery_price = t['price_fixed']
+    # Базовая цена 50 MDL
+    base_price = 50.0
+    # Надбавка за вес: +5 MDL за каждый кг свыше 5 кг
+    weight_surcharge = max(0, (weight - 5) * 5)
+    # Надбавка за объём: +20 MDL за каждый м³ свыше 0.1 м³
+    volume_surcharge = max(0, (volume - 0.1) * 20)
+    
+    total_price = base_price + weight_surcharge + volume_surcharge
+    delivery_price = f"{total_price:.2f} MDL"
     
     confirm_text = t['confirm_cargo'].format(
         cargo_type=cargo_type,
@@ -383,14 +428,16 @@ async def finalize_order(message: types.Message, state: FSMContext):
     order_id = f"#{user_id}{int(asyncio.get_event_loop().time())}"
     
     admin_text = (
-        f"🆕 <b>Новый заказ {order_id}</b>\n\n"
-        f"👤 <b>Клиент:</b> {data.get('customer_name')}\n"
-        f"📞 <b>Телефон:</b> {data.get('customer_phone')}\n"
-        f"📍 <b>Адрес:</b> {data.get('delivery_address')}\n"
-        f"📦 <b>Тип груза:</b> {data.get('cargo_type')}\n"
-        f"📝 <b>Детали груза:</b> {data.get('cargo_details')}\n"
-        f"💬 <b>Комментарий:</b> {data.get('comment')}\n"
-        f"🌐 <b>Язык:</b> {lang}"
+    f"🆕 <b>Новый заказ {order_id}</b>\n\n"
+    f"👤 <b>Клиент:</b> {data.get('customer_name')}\n"
+    f"📞 <b>Телефон:</b> {data.get('customer_phone')}\n"
+    f"📍 <b>Адрес:</b> {data.get('delivery_address')}\n"
+    f"📦 <b>Тип груза:</b> {data.get('cargo_type')}\n"
+    f"⚖️ <b>Вес:</b> {data.get('weight', '-')} кг\n"
+    f"📐 <b>Габариты:</b> {data.get('dimensions', '-')} см\n"
+    f"📝 <b>Детали груза:</b> {data.get('cargo_details')}\n"
+    f"💬 <b>Комментарий:</b> {data.get('comment')}\n"
+    f"🌐 <b>Язык:</b> {lang}"
     )
     await bot.send_message(ADMIN_ID, admin_text)
     
