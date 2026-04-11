@@ -14,7 +14,7 @@ from dotenv import load_dotenv
 load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID_STR = os.getenv("ADMIN_ID")
-
+REDIS_URL = os.getenv("REDIS_URL")  # Railway добавит эту переменную автоматически
 
 if not BOT_TOKEN or not ADMIN_ID_STR:
     raise ValueError("❌ BOT_TOKEN или ADMIN_ID не заданы в переменных окружения!")
