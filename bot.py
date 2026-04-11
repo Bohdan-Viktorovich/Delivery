@@ -70,13 +70,6 @@ app.router.add_get("/", handle_health)
 # --- Диспетчер с Redis storage ---
 dp = Dispatcher(storage=storage)
 
-# --- Веб-сервер для Railway healthcheck ---
-async def handle_health(request):
-    return web.Response(text="Bot is running")
-
-app = web.Application()
-app.router.add_get("/", handle_health)
-
 # --- Middleware напоминания ---
 reminded_users = set()
 
