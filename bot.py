@@ -250,7 +250,7 @@ async def process_cargo_selection(message: types.Message, state: FSMContext):
     await message.answer(t['ask_weight'], reply_markup=types.ReplyKeyboardRemove())
     await state.set_state(OrderForm.waiting_for_weight)
 
-    @dp.message(OrderForm.waiting_for_weight)
+@dp.message(OrderForm.waiting_for_weight)
 async def process_weight(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
     lang = user_lang.get(user_id, 'ru')
