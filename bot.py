@@ -305,14 +305,17 @@ async def process_dimensions(message: types.Message, state: FSMContext):
         await message.answer(t['cancel_text'], reply_markup=get_lang_keyboard())
         return
     
-    pattern = r'^(\d+)\s*[xх]\s*(\d+)\s*[xх]\s*(\d+)$'
-    match = re.match(pattern, message.text.strip().lower())
+    import re
+    # Принимаем разделители: x, х, ×, *, X, Х и пробелы вокруг них
+    pattern = r'^(\d+)\s*[xх×*XХ]\s*(\d+)\s*[xх×*XХ]\s*(\d+)$'
+    text = message.text.strip()
+    match = re.match(pattern, text, re.IGNORECASE)
     if not match:
         await message.answer(t['invalid_dimensions'])
         return
     
     length, width, height = map(int, match.groups())
-    volume = (length * width * height) / 1_000_000  # переводим см³ в м³
+    volume = (length * width * height) / 1_000_000  # в м³
     
     await state.update_data(
         dimensions=f"{length}x{width}x{height}",
