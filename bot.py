@@ -246,9 +246,28 @@ async def process_cargo_selection(message: types.Message, state: FSMContext):
         await message.answer(t['lang_set'], reply_markup=get_cargo_keyboard(lang))
         return
     
-    await state.update_data(cargo_type=message.text)
-    await message.answer(t['ask_weight'], reply_markup=types.ReplyKeyboardRemove())
-    await state.set_state(OrderForm.waiting_for_weight)
+    cargo_type = message.text
+    await state.update_data(cargo_type=cargo_type)
+    
+    # Определяем, нужно ли спрашивать вес/габариты
+    # Еда и цветы — без вопросов о весе и габаритах
+    skip_weight_dimensions = False
+    if cargo_type in [t['food'], t['flowers']]:
+        skip_weight_dimensions = True
+        # Устанавливаем значения по умолчанию для расчёта цены
+        await state.update_data(weight=1.0, volume=0.01)  # минимальные значения
+        await message.answer(t['cargo_prompt'], reply_markup=types.ReplyKeyboardRemove())
+        await state.set_state(OrderForm.waiting_for_confirm)
+    elif cargo_type == t['docs']:
+        # Для документов можно спросить только вес (опционально) или пропустить
+        skip_weight_dimensions = True
+        await state.update_data(weight=0.5, volume=0.001)
+        await message.answer(t['cargo_prompt'], reply_markup=types.ReplyKeyboardRemove())
+        await state.set_state(OrderForm.waiting_for_confirm)
+    else:
+        # Крупногабарит — спрашиваем вес и габариты
+        await message.answer(t['ask_weight'], reply_markup=types.ReplyKeyboardRemove())
+        await state.set_state(OrderForm.waiting_for_weight)
 
 @dp.message(OrderForm.waiting_for_weight)
 async def process_weight(message: types.Message, state: FSMContext):
