@@ -97,6 +97,8 @@ dp.message.middleware(StateReminderMiddleware())
 # --- Состояния диалога (должны быть объявлены до хэндлеров) ---
 class OrderForm(StatesGroup):
     waiting_for_cargo = State()
+    waiting_for_weight = State()      # новое
+    waiting_for_dimensions = State()  # новое
     waiting_for_confirm = State()
     waiting_for_name = State()
     waiting_for_phone = State()
@@ -115,6 +117,10 @@ LANGUAGES = {
         'back': "🔙 Назад",
         'confirm': "✅ Подтвердить",
         'cancel': "❌ Отмена",
+        'ask_weight': "⚖️ Укажите примерный вес груза в килограммах (например, 2.5):",
+        'ask_dimensions': "📐 Укажите габариты груза в сантиметрах (Длина x Ширина x Высота), например: 30x20x10:",
+        'invalid_weight': "⚠️ Пожалуйста, введите число (можно дробное через точку).",
+        'invalid_dimensions': "⚠️ Пожалуйста, введите габариты в формате ДxШxВ, например: 30x20x10.",
         'cargo_prompt': "📦 Пожалуйста, опишите груз подробнее: вес, габариты, хрупкость, количество мест.",
         'confirm_cargo': "📋 Ваш заказ:\n<b>Тип:</b> {cargo_type}\n<b>Описание:</b> {cargo_details}\n\n<b>Стоимость доставки:</b> {delivery_price}\n\nВсё верно?",
         'price_free': "Бесплатно (при заказе от 500 MDL)",
@@ -139,6 +145,10 @@ LANGUAGES = {
         'back': "🔙 Înapoi",
         'confirm': "✅ Confirmă",
         'cancel': "❌ Anulare",
+        'ask_weight': "⚖️ Indicați greutatea aproximativă a coletului în kilograme (de ex.: 2.5):",
+        'ask_dimensions': "📐 Indicați dimensiunile coletului în centimetri (Lungime x Lățime x Înălțime), de ex.: 30x20x10:",
+        'invalid_weight': "⚠️ Vă rugăm să introduceți un număr (se acceptă zecimale cu punct).",
+        'invalid_dimensions': "⚠️ Vă rugăm să introduceți dimensiunile în formatul LxLxÎ, de ex.: 30x20x10.",
         'cargo_prompt': "📦 Vă rugăm să descrieți coletul mai detaliat: greutate, dimensiuni, fragilitate, numărul de locuri.",
         'confirm_cargo': "📋 Comanda dvs.:\n<b>Tip:</b> {cargo_type}\n<b>Descriere:</b> {cargo_details}\n\n<b>Cost livrare:</b> {delivery_price}\n\nEste corect?",
         'price_free': "Gratuit (pentru comenzi peste 500 MDL)",
@@ -163,6 +173,10 @@ LANGUAGES = {
         'back': "🔙 Back",
         'confirm': "✅ Confirm",
         'cancel': "❌ Cancel",
+        'ask_weight': "⚖️ Enter the approximate weight of the cargo in kilograms (e.g., 2.5):",
+        'ask_dimensions': "📐 Enter the dimensions in centimeters (Length x Width x Height), e.g.: 30x20x10:",
+        'invalid_weight': "⚠️ Please enter a valid number (decimal point allowed).",
+        'invalid_dimensions': "⚠️ Please enter dimensions in LxWxH format, e.g.: 30x20x10.",
         'cargo_prompt': "📦 Please describe the cargo in more detail: weight, dimensions, fragility, number of pieces.",
         'confirm_cargo': "📋 Your order:\n<b>Type:</b> {cargo_type}\n<b>Description:</b> {cargo_details}\n\n<b>Delivery cost:</b> {delivery_price}\n\nIs everything correct?",
         'price_free': "Free (for orders over 500 MDL)",
