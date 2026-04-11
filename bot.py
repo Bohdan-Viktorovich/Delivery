@@ -19,6 +19,8 @@ from aiohttp import web
 
 load_dotenv()
 
+logging.basicConfig(level=logging.DEBUG)  # измените INFO на DEBUG
+
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID_STR = os.getenv("ADMIN_ID")
 REDIS_URL = os.getenv("REDIS_URL")
