@@ -44,8 +44,18 @@ logging.basicConfig(
 )
 
 # Redis и бот
-redis_client = Redis.from_url(REDIS_URL, decode_responses=False)
-storage = RedisStorage(redis=redis_client)
+import urllib.parse
+
+# Разбираем REDIS_URL
+parsed = urllib.parse.urlparse(REDIS_URL)
+redis_client = Redis(
+    host=parsed.hostname,
+    port=parsed.port,
+    password=parsed.password,
+    decode_responses=False,
+    ssl=(parsed.scheme == "rediss"),
+    # username не передаём, т.к. Redis на Railway не требует его
+)
 
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode='HTML'))
 dp = Dispatcher(storage=storage)
