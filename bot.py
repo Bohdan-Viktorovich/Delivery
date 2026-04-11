@@ -15,6 +15,7 @@ from aiogram.fsm.storage.redis import RedisStorage
 from aiogram.client.default import DefaultBotProperties
 from redis.asyncio import Redis
 from dotenv import load_dotenv
+from aiohttp import web
 
 load_dotenv()
 
@@ -48,6 +49,7 @@ storage = RedisStorage(redis=redis_client)
 
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode='HTML'))
 dp = Dispatcher(storage=storage)
+
 # --- Веб-сервер для Railway healthcheck ---
 async def handle_health(request):
     return web.Response(text="Bot is running")
@@ -284,9 +286,8 @@ async def process_cargo_selection(message: types.Message, state: FSMContext):
         return
     cargo_type = message.text
     await state.update_data(cargo_type=cargo_type)
-    # Пропускаем вес/габариты для еды, цветов, документов
     if cargo_type in [t['food'], t['flowers'], t['docs']]:
-        await state.update_data(weight=1.0, volume=0.01)  # значения по умолчанию
+        await state.update_data(weight=1.0, volume=0.01)
         await message.answer(t['ask_pickup'], reply_markup=ReplyKeyboardRemove())
         await state.set_state(OrderForm.waiting_for_pickup)
     else:
@@ -361,7 +362,6 @@ async def process_cargo_details(message: types.Message, state: FSMContext):
     cargo_type = data.get('cargo_type')
     weight = data.get('weight', 0)
     volume = data.get('volume', 0)
-    # Временная цена (без расстояния)
     base_price = 50.0
     weight_surcharge = max(0, (weight - 5) * 5)
     volume_surcharge = max(0, (volume - 0.1) * 20)
@@ -454,7 +454,6 @@ async def finalize_order(message: types.Message, state: FSMContext):
     order_id = f"#{user_id}{int(asyncio.get_event_loop().time())}"
     pickup = data.get('pickup_address', 'Не указан')
     delivery = data.get('delivery_address', 'Не указан')
-    # Расчёт расстояния и окончательной цены
     distance = 0.0
     if pickup and delivery:
         distance = await get_distance_km(pickup, delivery)
@@ -487,14 +486,11 @@ async def finalize_order(message: types.Message, state: FSMContext):
     await state.clear()
 
 async def main():
-    # Запускаем веб-сервер
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", PORT)
     await site.start()
     logging.info(f"Web server started on port {PORT}")
-    
-    # Запускаем поллинг бота
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
