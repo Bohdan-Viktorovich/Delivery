@@ -499,12 +499,19 @@ async def finalize_order(message: types.Message, state: FSMContext):
     await state.clear()
 
 async def main():
+    # Запускаем веб-сервер в фоне
     runner = web.AppRunner(app)
     await runner.setup()
     site = web.TCPSite(runner, "0.0.0.0", PORT)
     await site.start()
     logging.info(f"Web server started on port {PORT}")
+
+    # Запускаем бота
+    logging.info("Starting bot polling...")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        logging.info("Bot stopped")
