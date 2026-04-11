@@ -45,17 +45,23 @@ logging.basicConfig(
     ]
 )
 
-# Разбираем REDIS_URL
+# --- Надёжное подключение к Redis (Railway) ---
 import urllib.parse
-parsed = urllib.parse.urlparse(REDIS_URL)
-redis_client = Redis(
-    host=parsed.hostname,
-    port=parsed.port,
-    password=parsed.password,
-    decode_responses=False,
-    ssl=(parsed.scheme == "rediss"),
-)
 
+# Извлекаем хост, порт и пароль, игнорируя username
+parsed = urllib.parse.urlparse(REDIS_URL)
+redis_password = parsed.password
+redis_host = parsed.hostname
+redis_port = parsed.port or 6379
+
+# Создаём клиента Redis без username
+redis_client = Redis(
+    host=redis_host,
+    port=redis_port,
+    password=redis_password,
+    decode_responses=False,
+    ssl=(parsed.scheme == "rediss")
+)
 # Создаём хранилище FSM на Redis
 storage = RedisStorage(redis=redis_client)
 
