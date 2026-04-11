@@ -43,10 +43,8 @@ logging.basicConfig(
     ]
 )
 
-# Redis и бот
-import urllib.parse
-
 # Разбираем REDIS_URL
+import urllib.parse
 parsed = urllib.parse.urlparse(REDIS_URL)
 redis_client = Redis(
     host=parsed.hostname,
@@ -54,10 +52,22 @@ redis_client = Redis(
     password=parsed.password,
     decode_responses=False,
     ssl=(parsed.scheme == "rediss"),
-    # username не передаём, т.к. Redis на Railway не требует его
 )
 
+# Создаём хранилище FSM на Redis
+storage = RedisStorage(redis=redis_client)
+
+# Инициализируем бота
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode='HTML'))
+
+# --- Веб-сервер для Railway healthcheck ---
+async def handle_health(request):
+    return web.Response(text="Bot is running")
+
+app = web.Application()
+app.router.add_get("/", handle_health)
+
+# --- Диспетчер с Redis storage ---
 dp = Dispatcher(storage=storage)
 
 # --- Веб-сервер для Railway healthcheck ---
