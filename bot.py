@@ -218,6 +218,11 @@ def get_skip_keyboard(lang):
 async def get_distance_km(origin: str, destination: str) -> float:
     if not GEOAPIFY_API_KEY:
         return 0.0
+    # Добавляем город, если его нет (для Кишинёва)
+    if "кишинёв" not in origin.lower() and "chisinau" not in origin.lower():
+        origin += ", Кишинёв"
+    if "кишинёв" not in destination.lower() and "chisinau" not in destination.lower():
+        destination += ", Кишинёв"
     base_url = "https://api.geoapify.com/v1/routing"
     params = {
         "waypoints": f"{quote(origin)}|{quote(destination)}",
