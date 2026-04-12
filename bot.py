@@ -508,9 +508,17 @@ async def finalize_order(message: types.Message, state: FSMContext):
     await state.clear()
 
 async def main():
-    await dp.start_polling(bot)
-    # Бесконечное ожидание, чтобы процесс не завершался
-    await asyncio.Event().wait()
+    # Сбрасываем вебхук и все неподтверждённые обновления
+    await bot.delete_webhook(drop_pending_updates=True)
+    logging.info("Webhook deleted, pending updates dropped")
 
-if __name__ == "__main__":
-    asyncio.run(main())
+    # Запускаем веб-сервер
+    runner = web.AppRunner(app)
+    await runner.setup()
+    site = web.TCPSite(runner, "0.0.0.0", PORT)
+    await site.start()
+    logging.info(f"Web server started on port {PORT}")
+
+    # Запускаем поллинг бота
+    logging.info("Starting bot polling...")
+    await dp.start_polling(bot)
