@@ -11,26 +11,18 @@ from aiogram.filters import Command
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, Message, ReplyKeyboardRemove
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.fsm.storage.redis import RedisStorage
+from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.client.default import DefaultBotProperties
-from redis.asyncio import Redis
 from dotenv import load_dotenv
-from aiohttp import web
 
 load_dotenv()
 
-logging.basicConfig(level=logging.DEBUG)  # измените INFO на DEBUG
-
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID_STR = os.getenv("ADMIN_ID")
-REDIS_URL = os.getenv("REDIS_URL")
 GEOAPIFY_API_KEY = os.getenv("GEOAPIFY_API_KEY")
-PORT = int(os.getenv("PORT", 8000))
 
 if not BOT_TOKEN or not ADMIN_ID_STR:
     raise ValueError("❌ BOT_TOKEN или ADMIN_ID не заданы!")
-if not REDIS_URL:
-    raise ValueError("❌ REDIS_URL не найден. Добавьте Redis в Railway!")
 if not GEOAPIFY_API_KEY:
     raise ValueError("❌ GEOAPIFY_API_KEY не задан!")
 
@@ -45,42 +37,14 @@ logging.basicConfig(
     ]
 )
 
-# --- Надёжное подключение к Redis (Railway) ---
-import urllib.parse
-
-parsed = urllib.parse.urlparse(REDIS_URL)
-redis_host = parsed.hostname
-redis_port = parsed.port or 6379
-redis_password = parsed.password
-
-# Создаём клиента Redis с явным отключением username
-redis_client = Redis(
-    host=redis_host,
-    port=redis_port,
-    password=redis_password,
-    username=None,                # ← ключевое изменение
-    decode_responses=False,
-    ssl=(parsed.scheme == "rediss"),
-    ssl_cert_reqs=None,           # отключаем проверку сертификата (Railway использует самоподписанные)
-)
-# Создаём хранилище FSM на Redis
-storage = RedisStorage(redis=redis_client)
-
-# Инициализируем бота
+# Инициализация бота и диспетчера с MemoryStorage
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode='HTML'))
-
-# --- Веб-сервер для Railway healthcheck ---
-async def handle_health(request):
-    return web.Response(text="Bot is running")
-
-app = web.Application()
-app.router.add_get("/", handle_health)
-
-# --- Диспетчер с Redis storage ---
+storage = MemoryStorage()
 dp = Dispatcher(storage=storage)
 
-# --- Middleware напоминания ---
+# --- Middleware напоминания (однократное) ---
 reminded_users = set()
+user_lang = {}   # временное хранилище языка пользователя
 
 class StateReminderMiddleware(BaseMiddleware):
     async def __call__(self, handler, event: Message, data: dict):
@@ -131,7 +95,7 @@ class OrderForm(StatesGroup):
     waiting_for_address = State()
     waiting_for_comment = State()
 
-# --- Многоязычные тексты ---
+# --- Многоязычные тексты (без изменений, как в предыдущей полной версии) ---
 LANGUAGES = {
     'ru': {
         'select_lang': "🇷🇺 Выберите язык / Select language:",
@@ -222,8 +186,6 @@ LANGUAGES = {
     }
 }
 
-user_lang = {}
-
 # --- Клавиатуры ---
 def get_lang_keyboard():
     return ReplyKeyboardMarkup(
@@ -252,7 +214,7 @@ def get_skip_keyboard(lang):
     buttons = [[KeyboardButton(text=t['skip']), KeyboardButton(text=t['cancel'])]]
     return ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True, one_time_keyboard=True)
 
-# --- Функция расчёта расстояния ---
+# --- Функция расчёта расстояния через Geoapify ---
 async def get_distance_km(origin: str, destination: str) -> float:
     if not GEOAPIFY_API_KEY:
         return 0.0
@@ -275,7 +237,7 @@ async def get_distance_km(origin: str, destination: str) -> float:
         logging.error(f"Geoapify error: {e}")
         return 0.0
 
-# --- Обработчики ---
+# --- Обработчики команд и сообщений ---
 @dp.message(Command("start"))
 async def cmd_start(message: types.Message):
     await message.answer(LANGUAGES['ru']['select_lang'], reply_markup=get_lang_keyboard())
@@ -384,6 +346,7 @@ async def process_cargo_details(message: types.Message, state: FSMContext):
     cargo_type = data.get('cargo_type')
     weight = data.get('weight', 0)
     volume = data.get('volume', 0)
+    # Временная цена (без расстояния)
     base_price = 50.0
     weight_surcharge = max(0, (weight - 5) * 5)
     volume_surcharge = max(0, (volume - 0.1) * 20)
@@ -508,17 +471,10 @@ async def finalize_order(message: types.Message, state: FSMContext):
     await state.clear()
 
 async def main():
-    # Сбрасываем вебхук и все неподтверждённые обновления
     await bot.delete_webhook(drop_pending_updates=True)
     logging.info("Webhook deleted, pending updates dropped")
-
-    # Запускаем веб-сервер
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", PORT)
-    await site.start()
-    logging.info(f"Web server started on port {PORT}")
-
-    # Запускаем поллинг бота
     logging.info("Starting bot polling...")
     await dp.start_polling(bot)
+
+if __name__ == "__main__":
+    asyncio.run(main())
