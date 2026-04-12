@@ -48,19 +48,20 @@ logging.basicConfig(
 # --- Надёжное подключение к Redis (Railway) ---
 import urllib.parse
 
-# Извлекаем хост, порт и пароль, игнорируя username
 parsed = urllib.parse.urlparse(REDIS_URL)
-redis_password = parsed.password
 redis_host = parsed.hostname
 redis_port = parsed.port or 6379
+redis_password = parsed.password
 
-# Создаём клиента Redis без username
+# Создаём клиента Redis с явным отключением username
 redis_client = Redis(
     host=redis_host,
     port=redis_port,
     password=redis_password,
+    username=None,                # ← ключевое изменение
     decode_responses=False,
-    ssl=(parsed.scheme == "rediss")
+    ssl=(parsed.scheme == "rediss"),
+    ssl_cert_reqs=None,           # отключаем проверку сертификата (Railway использует самоподписанные)
 )
 # Создаём хранилище FSM на Redis
 storage = RedisStorage(redis=redis_client)
